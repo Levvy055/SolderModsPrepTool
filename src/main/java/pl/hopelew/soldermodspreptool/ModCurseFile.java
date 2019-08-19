@@ -17,7 +17,7 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @JsonPropertyOrder({ "id", "url", "name", "type", "version", "filesize", "versions", "downloads", "uploaded_at" })
-public class ModFile {
+public class ModCurseFile {
 
 	private static SimpleDateFormat f = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
 

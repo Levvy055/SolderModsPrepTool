@@ -1,9 +1,19 @@
 {
     "version": "1.12.2",
-    "mods": [
-        "journeymap",
-        "cofhcore",
-        "jei"
+    "mods": [{
+            "curse-slug": "jei",
+            "solder-slug": "jei",
+            "pathrepl":"jei_1.12.2"
+        },
+        {
+            "curse-slug": "journeymap",
+            "solder-slug": "journeymap"
+        },
+        {
+            "curse-slug": "cofhcore",
+            "solder-slug": "cofh-core",
+            "pathrepl":"CoFHCore-1.12.2"
+        }
 
     ]
 }

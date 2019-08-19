@@ -6,12 +6,13 @@ package pl.hopelew.soldermodspreptool;
 import java.io.File;
 import java.io.IOException;
 import java.net.HttpURLConnection;
+import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLConnection;
-import java.util.ArrayList;
 import java.util.List;
 
 import org.apache.commons.io.FileUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.zeroturnaround.zip.ZipUtil;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -25,98 +26,101 @@ public class App {
 	private static String version;
 	private static final File MODS_DIR = new File(WORK_DIR + "mods");
 
-	private static void downloadLatestMod(String slug) throws Exception {
-		System.out.println("-------- " + slug + " ---------");
-		ModData modData = getModData(slug);
-		modData.verify();
-		System.out.println("Title: " + modData.title);
-
-		List<ModFile> allFfiles = modData.files;
-		List<ModFile> versionFiles = modData.getFilesForVersion(version);
-		System.out.println("Files: all[" + allFfiles.size() + "] versionCompatible[" + versionFiles.size() + "]");
-
-		List<ModFile> releaseFiles = modData.getReleaseFilesForVersion(version);
-		List<ModFile> betaFiles = modData.getBetaFilesForVersion(version);
-		System.out.println("Files: beta[" + betaFiles.size() + "] release[" + releaseFiles.size() + "]");
-
-		ModFile mFile = releaseFiles.get(0);
-		File fileNewLocation = new File(WORK_DIR + "mods" + File.separatorChar + mFile.name);
-
-		Files.createParentDirs(fileNewLocation);
-
-		if (downloadFile(fileNewLocation, mFile.url + "/file")) {
-			zipModsDir(mFile.name, MODS_DIR);
-		}
-
-		mFile = betaFiles.get(0);
-
-
-	}
-
-	private static void zipModsDir(String mFile, File modsDir) {
-		ZipUtil.pack(modsDir, new File(WORK_DIR + mFile.replace(".jar", "") + ".zip"),
-				true);
-	}
-
-	private static boolean downloadFile(File file, String url) {
-		try {
-			final URLConnection connection = new URL(url).openConnection();
-			connection.setConnectTimeout(5000);
-			connection.setReadTimeout(15000);
-			connection.setRequestProperty("User-Agent",
-					"Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.11 (KHTML, like Gecko) Chrome/23.0.1271.95 Safari/537.11");
-
-
-			FileUtils.copyInputStreamToFile(connection.getInputStream(), file);
-			return true;
-		} catch (IOException e) {
-			e.printStackTrace();
-			return false;
-		}
-	}
-
-	private static ModData getModData(String slug) throws Exception {
+	private static ModCurseData getModData(String slug) throws Exception {
 		String urlLink = API_URL + slug;
 		URL url = new URL(urlLink);
+		System.out.println(urlLink);
+	
 		HttpURLConnection con = (HttpURLConnection) url.openConnection();
 		con.setRequestMethod("GET");
 		con.setConnectTimeout(5000);
 		con.setReadTimeout(15000);
-		System.out.println(urlLink);
+	
 		int status = con.getResponseCode();
 		if (status != 200 && status != 202) {
 			throw new Exception("Server responded with status [" + status + "] for req:" + urlLink);
 		}
+	
 		ObjectMapper objectMapper = new ObjectMapper();
-		ModData modData = objectMapper.readValue(con.getInputStream(), ModData.class);
+		ModCurseData modData = objectMapper.readValue(con.getInputStream(), ModCurseData.class);
+	
 		con.disconnect();
+	
 		return modData;
+	}
+
+	private static String downloadLatestMod(String slug) throws Exception {
+		System.out.println("-------- " + slug + " ---------");
+		ModCurseData modData = getModData(slug);
+		modData.verify();
+		System.out.println("Title: " + modData.title);
+
+		List<ModCurseFile> allFfiles = modData.files;
+		List<ModCurseFile> versionFiles = modData.getFilesForVersion(version);
+		System.out.println("Files: all[" + allFfiles.size() + "] versionCompatible[" + versionFiles.size() + "]");
+
+		List<ModCurseFile> releaseFiles = modData.getReleaseFilesForVersion(version);
+		List<ModCurseFile> betaFiles = modData.getBetaFilesForVersion(version);
+		System.out.println("Files: beta[" + betaFiles.size() + "] release[" + releaseFiles.size() + "]");
+
+		ModCurseFile mFile = releaseFiles.get(0);
+		File fileNewLocation = new File(WORK_DIR + "mods" + File.separatorChar + mFile.name);
+
+		downloadFile(fileNewLocation, mFile.url + "/file");
+		return mFile.name;
+
+		// mFile = betaFiles.get(0);
+
+	}
+
+	private static void downloadFile(File file, String url) throws MalformedURLException, IOException {
+		final URLConnection connection = new URL(url).openConnection();
+		connection.setConnectTimeout(5000);
+		connection.setReadTimeout(15000);
+		connection.setRequestProperty("User-Agent",
+				"Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.11 (KHTML, like Gecko) Chrome/23.0.1271.95 Safari/537.11");
+
+		FileUtils.copyInputStreamToFile(connection.getInputStream(), file);
+	}
+
+	private static void zipModsDir(String mFile, String solderSlug, String fileNamePathToBeReplaced) {
+		String path = WORK_DIR + mFile.replace(".jar", "") + ".zip";
+		if (!StringUtils.isEmpty(fileNamePathToBeReplaced)) {
+			path = path.replace(fileNamePathToBeReplaced, solderSlug);
+		}
+		ZipUtil.pack(MODS_DIR, new File(path), true);
 	}
 
 	public static void main(String[] args) {
 		HttpURLConnection.setFollowRedirects(true);
-		ObjectMapper objectMapper = new ObjectMapper();
-		List<String> modSlugs = new ArrayList<>();
+		ModData[] modDatas;
+
 		try {
+			ObjectMapper objectMapper = new ObjectMapper();
 			JsonNode node = objectMapper.readTree(new File(FILE_NAME));
 			version = node.get("version").asText();
-			for (JsonNode sn : node.get("mods")) {
-				modSlugs.add(sn.textValue());
-			}
+
+			modDatas = objectMapper.treeToValue(node.get("mods"), ModData[].class);
+			Files.createParentDirs(new File(WORK_DIR + "mods" + File.separatorChar + "x.y"));
 		} catch (IOException e) {
 			e.printStackTrace();
 			return;
 		}
-		for (String modSlug : modSlugs) {
+
+		for (ModData modData : modDatas) {
 			try {
-				downloadLatestMod(modSlug);
-				if (MODS_DIR.exists()) {
-					FileUtils.deleteDirectory(MODS_DIR);
-				}
+				FileUtils.cleanDirectory(MODS_DIR);
+				String fileName = downloadLatestMod(modData.curseSlug);
+				zipModsDir(fileName, modData.solderSlug, modData.fileNamePathToBeReplaced);
 			} catch (Exception e) {
-				System.out.println("Error for mod: " + modSlug + ":");
+				System.out.println("Error for mod: " + modData.curseSlug + ":");
 				e.printStackTrace();
 			}
+		}
+		try {
+			FileUtils.cleanDirectory(MODS_DIR);
+		} catch (IOException e) {
+			e.printStackTrace();
 		}
 	}
 }
